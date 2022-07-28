@@ -1,0 +1,193 @@
+--this project what done using Bigquery for the sql part, Tableau for the visualisation and Ms Powerpoint for the presentation
+--I used bigqueries to import the datasets from my desktop unto a folder in bigquery called 'dotted-saga-337811.Project_Bike', 
+--you will see this folder being combined with different table names in this project
+
+--the dataset i used was from April 2021 to March 2022. as bigquery only allows for file sizes below 100mb, i had to seperate some of the month files into
+--two seperate files in-order to import them.
+
+--the tables where names as follows: 202104, 202105, 202106, 202106_1, 202107, 202107_1, 202108, 202108_1, 202109, 202109_1, 
+--202110, 202110_1, 202111,202112, 202201, 202202, 202203
+
+--after importing the dataset, i noticed that one of the datatypes was different to the others so i had to change the datatype without checking the order
+
+SELECT 
+ride_id,
+rideable_type,
+started_at,
+ended_at,
+start_station_name,
+CAST(start_station_id AS STRING) as start_station_id,
+end_station_name,
+CAST(end_station_id AS STRING) AS end_station_id,
+start_lat,
+start_lng,
+end_lat,
+end_lng,
+member_casual
+FROM `dotted-saga-337811.Project_Bike.202111`
+
+--after this all the datatypes and headers were the same so i could merge (union) the data into one big dataset
+
+SELECT * FROM `dotted-saga-337811.Capstone_D.202101`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202102`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202103`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202104`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202105`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202106`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202106_1`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202107_1`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202107`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202108`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202108_1`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202109`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202109_1`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202110`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202110_1`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202111`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202112`
+
+--i saved the results as a table in big query as `dotted-saga-337811.Project_Bike.2021`
+
+-- i joint the dataset for 2022 as well
+
+SELECT * FROM `dotted-saga-337811.Capstone_D.202201`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202202`
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Capstone_D.202203`
+
+--i saved the results as a table in big query as `dotted-saga-337811.Project_Bike.2022`
+-- and finally i joint the two datesets together to form one dataset
+
+SELECT * FROM `dotted-saga-337811.Project_Bike.2022` 
+UNION DISTINCT
+SELECT * FROM `dotted-saga-337811.Project_Bike.2021`
+order by started_at
+
+--i saved the results as a table in big query as `dotted-saga-337811.Project_Bike.Cyclistic_Bike_Data`
+
+--we created a new table from the cyclistic_bike_data and added day of the week and length of each ride
+
+SELECT *, ended_at-started_at as len_of_ride, EXTRACT(DAYOFWEEK FROM DATE_SUB(started_at, interval '1' day)) as day_of_the_week
+FROM `dotted-saga-337811.Project_Bike.2021`
+ORDER BY 3
+--i named the table `dotted-saga-337811.Project_Bike.len_n_dow`
+
+--CLEANING THE DATA
+
+--check for duplicates
+
+SELECT ride_id, count(ride_id)
+FROM `dotted-saga-337811.Project_Bike.len_n_dow`
+GROUP BY ride_id
+HAVING count(ride_id) >1
+
+--there are five instances where the same ride_id was used twice for a different date. 
+
+--i then extracted the data for all the rides than are greater than (1) one second and ride id is not null
+
+SELECT ride_id, rideable_type, start_station_id, ended_at as started_at, started_at as ended_at,  
+member_casual, started_at-ended_at as len_of_ride, day_of_the_week
+FROM `dotted-saga-337811.Project_Bike.len_n_dow`
+WHERE ride_id is not null AND 
+len_of_ride < interval '-1' second
+-- i saved the dataset as `dotted-saga-337811.Project_Bike.ride_greater_than_1_sec`
+
+/* this is to correct the assumption for the rides that has ride length less than 1 second. 
+the assumption is that the started_at and ended_at time and date where swap around */
+
+SELECT ride_id, rideable_type, start_station_id, ended_at as started_at, started_at as ended_at,  member_casual, started_at-ended_at as len_of_ride, day_of_the_week
+FROM `dotted-saga-337811.Project_Bike.len_n_dow`
+WHERE ride_id is not null AND 
+len_of_ride < interval '-0' second
+--combining the correction with the already correct dataset
+union distinct
+SELECT * FROM `dotted-saga-337811.Project_Bike.ride_greater_than_1_sec`
+
+-- a check to see if there are any length of rides below 0 second
+
+SELECT * 
+FROM `dotted-saga-337811.Project_Bike.length_n_day_of_week_2021`
+WHERE len_of_ride < interval '0' second
+
+/* Results 
+There is no data to display. */
+
+--MATRIX
+-SEASONS
+-this is to get the month from the started_at date
+
+SELECT member_casual, EXTRACT(date from started_at) as eachmonth
+FROM `dotted-saga-337811.Project_Bike.length_n_day_of_week_2021`
+
+--i saved it as `dotted-saga-337811.Project_Bike.months`
+
+-- i grouped the months according to the season in america
+
+SELECT member_casual, count(eachmonth) rides, 
+IF(eachmonth BETWEEN 3 AND 5, "SPRING", 
+IF(eachmonth BETWEEN 6 AND 8, "SUMMER", 
+IF(eachmonth BETWEEN 9 AND 11, "FALL", "WINTER"))) season
+FROM `dotted-saga-337811.Project_Bike.months`
+GROUP BY season, member_casual
+
+
+--i saved it as `dotted-saga-337811.Project_Bike.season_calc`
+
+-HOURLY RIDE
+
+SELECT *, EXTRACT(hour FROM started_at) as hour_from_started_at
+FROM `dotted-saga-337811.Project_Bike.length_n_day_of_week_2021` 
+
+-- i saved it as `dotted-saga-337811.Project_Bike.clean_data`
+
+SELECT hour_from_started_at, count(hour_from_started_at) as number_of_ride
+FROM `dotted-saga-337811.Project_Bike.clean_data`
+GROUP BY hour_from_started_at
+
+-DAY OF THE WEEK
+
+SELECT member_casual, day_of_the_week, count(day_of_the_week) count_day_of_the_week
+FROM `dotted-saga-337811.Project_Bike.clean_data`
+GROUP BY day_of_the_week, member_casual
+ORDER BY 2,1
+
+-NUMER OF RIDES
+
+SELECT member_casual, count(ride_id) AS number_of_rides
+FROM `dotted-saga-337811.Project_Bike.clean_data`
+GROUP BY member_casual
+
+/*
+Row	member_casual	number_of_rides	
+1	  member        3066058
+2   casual        2529005
+*/
+
+-AVERAGE RIDE
+
+SELECT member_casual, avg(len_of_ride) AS length_of_rides
+FROM `dotted-saga-337811.Project_Bike.clean_data`
+GROUP BY member_casual
+
+/* RESULTS
+Row	member_casual	length_of_rides	
+1   casual        0-0 0 0:32:0.133276921
+2   member        0-0 0 0:13:38.027499805
+*/
